@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Self Check-in | Hotel VMS</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Prompt', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .input-field {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .input-field:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #3b82f6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+        }
+        
+        .input-field.error {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .step-indicator {
+            transition: all 0.3s ease;
+        }
+        
+        .step-indicator.active {
+            background: #3b82f6;
+            transform: scale(1.2);
+        }
+        
+        .step-indicator.completed {
+            background: #22c55e;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 400px;
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            border: 2px solid #fca5a5;
+            color: #ffffff;
+            padding: 16px 20px;
+            border-radius: 12px;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 8px 32px rgba(220, 38, 38, 0.4), 0 0 0 4px rgba(220, 38, 38, 0.2);
+            font-weight: 600;
+            font-size: 15px;
+            text-align: center;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .error-message::before {
+            content: '⚠️ ';
+            font-size: 18px;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(calc(-50% - 5px)) translateY(0); }
+            20%, 40%, 60%, 80% { transform: translateX(calc(-50% + 5px)) translateY(0); }
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+        }
+        
+        select.input-field {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px;
+            padding-right: 40px;
+        }
+        
+        .success-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 400px;
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            border: 2px solid #86efac;
+            color: #ffffff;
+            padding: 16px 20px;
+            border-radius: 12px;
+            display: none;
+            z-index: 9999;
+            box-shadow: 0 8px 32px rgba(22, 163, 74, 0.4);
+            font-weight: 600;
+            font-size: 15px;
+            text-align: center;
+        }
+        
+        .offline-banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            color: white;
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 14px;
+            z-index: 10000;
+            display: none;
+        }
+        
+        .pending-badge {
+            background: #f59e0b;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+    </style>
+</head>
+<body class="text-white">
+    <!-- Offline Banner -->
+    <div id="offline-banner" class="offline-banner">
+        ⚠️ ไม่มีการเชื่อมต่ออินเทอร์เน็ต - ข้อมูลจะถูกบันทึกในเครื่องและส่งเมื่อกลับมาออนไลน์
+    </div>
+    
+    <!-- Success Message -->
+    <div id="success-message" class="success-message"></div>
+
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="p-4 text-center border-b border-white/10">
+            <h1 class="text-xl font-bold text-blue-400">Hotel VMS</h1>
+            <p class="text-sm text-gray-400">Self Check-in System</p>
+            <!-- Pending Sync Indicator -->
+            <div id="pending-indicator" class="mt-2 hidden">
+                <span class="pending-badge">
+                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span id="pending-count">0</span> รายการรอส่ง
+                </span>
+                <button onclick="syncPendingRecords()" class="ml-2 text-xs text-blue-400 underline">ส่งตอนนี้</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-4 max-w-md mx-auto w-full">
+            <!-- Step Indicators -->
+            <div class="flex justify-center gap-3 mb-6">
+                <div id="step1-indicator" class="step-indicator w-3 h-3 rounded-full bg-gray-600 active"></div>
+                <div id="step2-indicator" class="step-indicator w-3 h-3 rounded-full bg-gray-600"></div>
+                <div id="step3-indicator" class="step-indicator w-3 h-3 rounded-full bg-gray-600"></div>
+            </div>
+
+            <!-- Error Message -->
+            <div id="error-message" class="error-message"></div>
+
+            <!-- Step 1: Consent -->
+            <div id="step1" class="fade-in">
+                <div class="glass-card rounded-2xl p-6 mb-4">
+                    <h2 class="text-xl font-semibold mb-4 text-center">ข้อตกลงและความยินยอม</h2>
+                    
+                    <div id="consent-text" class="bg-white/5 rounded-xl p-4 mb-4 max-h-60 overflow-y-auto text-sm text-gray-300 leading-relaxed">
+                        <p class="mb-3"><strong class="text-white">นโยบายความเป็นส่วนตัว</strong></p>
+                        <p class="mb-3">ข้าพเจ้ายินยอมให้เก็บรวบรวม ใช้ และเปิดเผยข้อมูลส่วนบุคคลของข้าพเจ้า ได้แก่ ชื่อ-นามสกุล เลขบัตรประชาชน/Passport และเบอร์โทรศัพท์ เพื่อวัตถุประสงค์ในการลงทะเบียนเข้าพักและรักษาความปลอดภัย</p>
+                        <p class="mb-3"><strong class="text-white">ข้อกำหนดการใช้งาน</strong></p>
+                        <p class="mb-3">ข้าพเจ้ารับทราบและยอมรับว่าข้อมูลที่ให้ไว้เป็นความจริงทุกประการ และยินยอมปฏิบัติตามกฎระเบียบของสถานที่</p>
+                        <p><strong class="text-white">การเก็บรักษาข้อมูล</strong></p>
+                        <p>ข้อมูลจะถูกเก็บรักษาตามระยะเวลาที่กฎหมายกำหนด และจะถูกลบเมื่อหมดความจำเป็น</p>
+                    </div>
+                    
+                    <label class="flex items-start gap-3 cursor-pointer mb-4">
+                        <input type="checkbox" id="consent-checkbox" class="mt-1 w-5 h-5 rounded border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-white/10">
+                        <span class="text-sm text-gray-300">ข้าพเจ้าได้อ่านและยอมรับข้อตกลงและนโยบายความเป็นส่วนตัวข้างต้น</span>
+                    </label>
+                    
+                    <button id="consent-btn" onclick="goToStep2()" disabled class="btn-primary w-full py-3 rounded-xl font-semibold text-white">
+                        ถัดไป
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 2: Form -->
+            <div id="step2" class="fade-in hidden">
+                <div class="glass-card rounded-2xl p-6 mb-4">
+                    <h2 class="text-xl font-semibold mb-4 text-center">กรอกข้อมูลผู้เข้าติดต่อ</h2>
+                    
+                    <form id="checkin-form" onsubmit="submitForm(event)">
+                        <!-- Name -->
+                        <div class="mb-4">
+                            <label class="block text-sm text-gray-400 mb-1">ชื่อ-นามสกุล <span class="text-red-400">*</span></label>
+                            <input type="text" id="name" required class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกชื่อ-นามสกุล">
+                        </div>
+                        
+                        <!-- ID Card / Passport -->
+                        <div class="mb-4">
+                            <label class="block text-sm text-gray-400 mb-1">เลขบัตรประชาชน/Passport <span class="text-red-400">*</span></label>
+                            <input type="text" id="idCard" required class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกเลขบัตรประชาชนหรือ Passport">
+                        </div>
+                        
+                        <!-- Phone -->
+                        <div class="mb-4">
+                            <label class="block text-sm text-gray-400 mb-1">เบอร์โทรศัพท์ <span class="text-red-400">*</span></label>
+                            <input type="tel" id="phone" required class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกเบอร์โทรศัพท์">
+                        </div>
+                        
+                        <!-- Company -->
+                        <div class="mb-4">
+                            <label id="company-label" class="block text-sm text-gray-400 mb-1">บริษัท/หน่วยงาน</label>
+                            <input type="text" id="company" class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกชื่อบริษัทหรือหน่วยงาน">
+                        </div>
+                        
+                        <!-- Visitor Type -->
+                        <div class="mb-4">
+                            <label class="block text-sm text-gray-400 mb-1">ประเภทผู้เข้าติดต่อ <span class="text-red-400">*</span></label>
+                            <select id="visitorType" required class="input-field w-full px-4 py-3 rounded-xl text-white" onchange="handleVisitorTypeChange()">
+                                <option value="">-- เลือกประเภท --</option>
+                                <option value="visitor">Visitor (ผู้เยี่ยมชม)</option>
+                                <option value="casual">Casual (พนักงานรายวัน)</option>
+                                <option value="contractor">Contractor (ผู้รับเหมา)</option>
+                                <option value="organizer">Organizer (ผู้จัดงาน)</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Department Field (shown only for casual) -->
+                        <div id="department-field" class="mb-4 hidden">
+                            <label class="block text-sm text-gray-400 mb-1">ทำงานที่แผนก <span class="text-red-400">*</span></label>
+                            <input type="text" id="department" class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกแผนกที่ทำงาน">
+                        </div>
+                        
+                        <!-- Purpose Field (shown only for visitor) -->
+                        <div id="purpose-field" class="mb-4 hidden">
+                            <label class="block text-sm text-gray-400 mb-1">ลักษณะธุระที่ติดต่อ <span class="text-red-400">*</span></label>
+                            <input type="text" id="purpose" class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกลักษณะธุระที่มาติดต่อ">
+                        </div>
+                        
+                        <!-- Locker Number (shown only for casual) -->
+                        <div id="locker-field" class="mb-4 hidden">
+                            <label class="block text-sm text-gray-400 mb-1">หมายเลขล็อคเกอร์ <span class="text-red-400">*</span></label>
+                            <input type="text" id="lockerNumber" class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกหมายเลขล็อคเกอร์">
+                        </div>
+                        
+                        <!-- Work Area (shown only for contractor and organizer) -->
+                        <div id="work-area-field" class="mb-4 hidden">
+                            <label class="block text-sm text-gray-400 mb-1">พื้นที่ทำงาน <span class="text-red-400">*</span></label>
+                            <input type="text" id="workArea" class="input-field w-full px-4 py-3 rounded-xl text-white" placeholder="กรอกพื้นที่ที่จะทำงาน">
+                        </div>
+                        
+                        <div class="flex gap-3 mt-6">
+                            <button type="button" onclick="goToStep1()" class="flex-1 py-3 rounded-xl font-semibold text-gray-300 border border-gray-600 hover:bg-white/5">
+                                ย้อนกลับ
+                            </button>
+                            <button type="submit" id="submit-btn" class="btn-primary flex-1 py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2">
+                                <span>ลงทะเบียน</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Step 3: Success -->
+            <div id="step3" class="fade-in hidden">
+                <div class="glass-card rounded-2xl p-6 text-center">
+                    <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    
+                    <h2 class="text-xl font-semibold mb-2 text-green-400">ลงทะเบียนสำเร็จ!</h2>
+                    <p class="text-gray-400 text-sm mb-4">กรุณาแสดง QR Code นี้ต่อเจ้าหน้าที่เพื่อ Check-out</p>
+                    
+                    <!-- QR Code -->
+                    <div class="qr-container inline-block mb-4">
+                        <div id="qrcode"></div>
+                    </div>
+                    
+                    <!-- Check-in Info -->
+                    <div class="bg-white/5 rounded-xl p-4 mb-4 text-left">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-400 text-sm">ชื่อ:</span>
+                            <span id="result-name" class="text-white text-sm font-medium"></span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-400 text-sm">เลขบัตร:</span>
+                            <span id="result-id" class="text-white text-sm font-medium"></span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-400 text-sm">ประเภท:</span>
+                            <span id="result-type" class="text-white text-sm font-medium"></span>
+                        </div>
+                        <div class="flex justify-between mb-2">
+                            <span class="text-gray-400 text-sm">วันที่ Check-in:</span>
+                            <span id="result-date" class="text-white text-sm font-medium"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400 text-sm">เวลา:</span>
+                            <span id="result-time" class="text-white text-sm font-medium"></span>
+                        </div>
+                    </div>
+                    
+                    <p class="text-xs text-gray-500 mb-4">รหัสการลงทะเบียน: <span id="result-code" class="text-blue-400"></span></p>
+                    
+                    <div class="flex gap-3 mb-3">
+                        <button onclick="saveQRCode()" class="flex-1 py-3 rounded-xl font-semibold text-white bg-green-600 hover:bg-green-700 flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            <span>บันทึก QR Code</span>
+                        </button>
+                    </div>
+                    
+                    <button onclick="resetForm()" class="btn-primary w-full py-3 rounded-xl font-semibold text-white">
+                        ลงทะเบียนใหม่
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="p-4 text-center border-t border-white/10">
+            <p class="text-xs text-gray-500">© 2026 Hotel VMS - Visitor Management System</p>
+        </footer>
+    </div>
+
+    <script>
+        // LocalStorage keys
+        const PENDING_RECORDS_KEY = 'vms_pending_records';
+        const FORM_BACKUP_KEY = 'vms_form_backup';
+        
+        // Initialize consent checkbox
+        document.getElementById('consent-checkbox').addEventListener('change', function() {
+            document.getElementById('consent-btn').disabled = !this.checked;
+        });
+
+        // Auto-save form data on input
+        document.querySelectorAll('#checkin-form input, #checkin-form select').forEach(el => {
+            el.addEventListener('input', saveFormBackup);
+            el.addEventListener('change', saveFormBackup);
+        });
+
+        function saveFormBackup() {
+            const formData = {
+                name: document.getElementById('name').value,
+                idCard: document.getElementById('idCard').value,
+                phone: document.getElementById('phone').value,
+                company: document.getElementById('company').value,
+                visitorType: document.getElementById('visitorType').value,
+                department: document.getElementById('department').value,
+                purpose: document.getElementById('purpose').value,
+                lockerNumber: document.getElementById('lockerNumber').value,
+                workArea: document.getElementById('workArea').value,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(FORM_BACKUP_KEY, JSON.stringify(formData));
+        }
+
+        function loadFormBackup() {
+            try {
+                const backup = localStorage.getItem(FORM_BACKUP_KEY);
+                if (backup) {
+                    const data = JSON.parse(backup);
+                    // Only restore if backup is less than 1 hour old
+                    if (Date.now() - data.timestamp < 3600000) {
+                        if (data.name) document.getElementById('name').value = data.name;
+                        if (data.idCard) document.getElementById('idCard').value = data.idCard;
+                        if (data.phone) document.getElementById('phone').value = data.phone;
+                        if (data.company) document.getElementById('company').value = data.company;
+                        if (data.visitorType) {
+                            document.getElementById('visitorType').value = data.visitorType;
+                            handleVisitorTypeChange();
+                        }
+                        if (data.department) document.getElementById('department').value = data.department;
+                        if (data.purpose) document.getElementById('purpose').value = data.purpose;
+                        if (data.lockerNumber) document.getElementById('lockerNumber').value = data.lockerNumber;
+                        if (data.workArea) document.getElementById('workArea').value = data.workArea;
+                    }
+                }
+            } catch (e) {
+                console.log('Could not restore form backup');
+            }
+        }
+
+        function clearFormBackup() {
+            localStorage.removeItem(FORM_BACKUP_KEY);
+        }
+
+        // Pending records management
+        function getPendingRecords() {
+            try {
+                return JSON.parse(localStorage.getItem(PENDING_RECORDS_KEY) || '[]');
+            } catch {
+                return [];
+            }
+        }
+
+        function savePendingRecord(record) {
+            const records = getPendingRecords();
+            records.push({
+                ...record,
+                pendingId: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                createdAt: new Date().toISOString()
+            });
+            localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify(records));
+            updatePendingIndicator();
+        }
+
+        function removePendingRecord(pendingId) {
+            const records = getPendingRecords().filter(r => r.pendingId !== pendingId);
+            localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify(records));
+            updatePendingIndicator();
+        }
+
+        function updatePendingIndicator() {
+            const records = getPendingRecords();
+            const indicator = document.getElementById('pending-indicator');
+            const countEl = document.getElementById('pending-count');
+            
+            if (records.length > 0) {
+                indicator.classList.remove('hidden');
+                countEl.textContent = records.length;
+            } else {
+                indicator.classList.add('hidden');
+            }
+        }
+
+        // Network status
+        function updateOnlineStatus() {
+            const banner = document.getElementById('offline-banner');
+            if (navigator.onLine) {
+                banner.style.display = 'none';
+                // Try to sync pending records when back online
+                syncPendingRecords();
+            } else {
+                banner.style.display = 'block';
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        async function syncPendingRecords() {
+            if (!navigator.onLine) return;
+            
+            const records = getPendingRecords();
+            if (records.length === 0) return;
+            
+            for (const record of records) {
+                try {
+                    const response = await fetch('/api/trpc/selfCheckIn.submit?batch=1', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ "0": { "json": record.formData } })
+                    });
+                    
+                    const result = await response.json();
+                    let data = null;
+                    if (Array.isArray(result) && result[0]) {
+                        data = result[0].result?.data?.json || result[0].result?.data;
+                    }
+                    
+                    if (data && data.success) {
+                        removePendingRecord(record.pendingId);
+                        showSuccess('ส่งข้อมูลที่ค้างไว้สำเร็จ: ' + record.formData.fullName);
+                    }
+                } catch (error) {
+                    console.log('Failed to sync record:', record.pendingId);
+                }
+            }
+        }
+
+        function handleVisitorTypeChange() {
+            const visitorType = document.getElementById('visitorType').value;
+            const lockerField = document.getElementById('locker-field');
+            const lockerInput = document.getElementById('lockerNumber');
+            const companyInput = document.getElementById('company');
+            const companyLabel = document.getElementById('company-label');
+            const departmentField = document.getElementById('department-field');
+            const departmentInput = document.getElementById('department');
+            const purposeField = document.getElementById('purpose-field');
+            const purposeInput = document.getElementById('purpose');
+            
+            // Handle department field for casual
+            if (visitorType === 'casual') {
+                departmentField.classList.remove('hidden');
+                departmentInput.required = true;
+                lockerField.classList.remove('hidden');
+                lockerInput.required = true;
+            } else {
+                departmentField.classList.add('hidden');
+                departmentInput.required = false;
+                departmentInput.value = '';
+                lockerField.classList.add('hidden');
+                lockerInput.required = false;
+                lockerInput.value = '';
+            }
+            
+            // Handle purpose field for visitor
+            if (visitorType === 'visitor') {
+                purposeField.classList.remove('hidden');
+                purposeInput.required = true;
+            } else {
+                purposeField.classList.add('hidden');
+                purposeInput.required = false;
+                purposeInput.value = '';
+            }
+            
+            // Handle company field for contractor and organizer
+            if (visitorType === 'contractor' || visitorType === 'organizer') {
+                companyInput.required = true;
+                companyLabel.innerHTML = 'บริษัท/หน่วยงาน <span class="text-red-400">*</span>';
+            } else {
+                companyInput.required = false;
+                companyLabel.innerHTML = 'บริษัท/หน่วยงาน';
+            }
+            
+            // Handle work area field for contractor and organizer
+            const workAreaField = document.getElementById('work-area-field');
+            const workAreaInput = document.getElementById('workArea');
+            if (visitorType === 'contractor' || visitorType === 'organizer') {
+                workAreaField.classList.remove('hidden');
+                workAreaInput.required = true;
+            } else {
+                workAreaField.classList.add('hidden');
+                workAreaInput.required = false;
+                workAreaInput.value = '';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            // Scroll to top to ensure error is visible
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Add shake animation
+            errorDiv.style.animation = 'none';
+            errorDiv.offsetHeight; // Trigger reflow
+            errorDiv.style.animation = 'slideDown 0.3s ease-out, shake 0.5s ease-in-out 0.3s';
+            
+            // Auto hide after 8 seconds
+            setTimeout(() => {
+                errorDiv.style.animation = 'fadeOut 0.3s ease-out forwards';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 300);
+            }, 8000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = '✓ ' + message;
+            successDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function goToStep1() {
+            document.getElementById('step1').classList.remove('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            
+            document.getElementById('step1-indicator').classList.add('active');
+            document.getElementById('step1-indicator').classList.remove('completed');
+            document.getElementById('step2-indicator').classList.remove('active', 'completed');
+            document.getElementById('step3-indicator').classList.remove('active', 'completed');
+        }
+
+        function goToStep2() {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.remove('hidden');
+            document.getElementById('step3').classList.add('hidden');
+            
+            document.getElementById('step1-indicator').classList.remove('active');
+            document.getElementById('step1-indicator').classList.add('completed');
+            document.getElementById('step2-indicator').classList.add('active');
+            document.getElementById('step3-indicator').classList.remove('active', 'completed');
+            
+            // Load form backup
+            loadFormBackup();
+        }
+
+        function goToStep3(data) {
+            document.getElementById('step1').classList.add('hidden');
+            document.getElementById('step2').classList.add('hidden');
+            document.getElementById('step3').classList.remove('hidden');
+            
+            document.getElementById('step1-indicator').classList.remove('active');
+            document.getElementById('step1-indicator').classList.add('completed');
+            document.getElementById('step2-indicator').classList.remove('active');
+            document.getElementById('step2-indicator').classList.add('completed');
+            document.getElementById('step3-indicator').classList.add('active');
+            
+            // Display result
+            document.getElementById('result-name').textContent = data.name;
+            document.getElementById('result-id').textContent = maskIdCard(data.idCard || '-');
+            document.getElementById('result-type').textContent = getVisitorTypeLabel(data.visitorType);
+            document.getElementById('result-date').textContent = data.date;
+            document.getElementById('result-time').textContent = data.time;
+            document.getElementById('result-code').textContent = data.recordId;
+            
+            // Generate QR Code with the correct format: VMS:recordId:signature:expiry
+            const qrcodeContainer = document.getElementById('qrcode');
+            qrcodeContainer.innerHTML = ''; // Clear previous
+            new QRCode(qrcodeContainer, {
+                text: data.qrCode,
+                width: 200,
+                height: 200,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        function getVisitorTypeLabel(type) {
+            const labels = {
+                'visitor': 'Visitor (ผู้เยี่ยมชม)',
+                'casual': 'Casual (พนักงานรายวัน)',
+                'contractor': 'Contractor (ผู้รับเหมา)',
+                'organizer': 'Organizer (ผู้จัดงาน)'
+            };
+            return labels[type] || type;
+        }
+
+        function maskIdCard(idCard) {
+            if (!idCard || idCard === '-') return '-';
+            if (idCard.length <= 4) return idCard;
+            return idCard.slice(0, 2) + '*'.repeat(idCard.length - 4) + idCard.slice(-2);
+        }
+
+        function generateQRCode(recordId) {
+            // Generate QR code in the format: VMS:recordId:signature:expiry
+            const expiry = new Date();
+            expiry.setDate(expiry.getDate() + 1); // Valid for 24 hours
+            
+            const signature = btoa(recordId + '-' + expiry.getTime()).slice(0, 8);
+            const qrCode = 'VMS:' + recordId + ':' + signature + ':' + expiry.getTime();
+            
+            return { qrCode, qrExpiry: expiry.toISOString() };
+        }
+
+        async function submitForm(event) {
+            event.preventDefault();
+            
+            const visitorType = document.getElementById('visitorType').value;
+            const lockerNumber = document.getElementById('lockerNumber').value;
+            
+            // Validate visitor type
+            if (!visitorType) {
+                showError('กรุณาเลือกประเภทผู้เข้าติดต่อ');
+                document.getElementById('visitorType').classList.add('error');
+                return;
+            }
+            
+            // Validate department for casual
+            const department = document.getElementById('department').value;
+            if (visitorType === 'casual' && !department) {
+                showError('กรุณากรอกแผนกที่ทำงาน');
+                document.getElementById('department').classList.add('error');
+                return;
+            }
+            
+            // Validate locker for casual
+            if (visitorType === 'casual' && !lockerNumber) {
+                showError('กรุณากรอกหมายเลขล็อคเกอร์');
+                document.getElementById('lockerNumber').classList.add('error');
+                return;
+            }
+            
+            // Validate purpose for visitor
+            const purposeValue = document.getElementById('purpose').value;
+            if (visitorType === 'visitor' && !purposeValue) {
+                showError('กรุณากรอกลักษณะธุระที่ติดต่อ');
+                document.getElementById('purpose').classList.add('error');
+                return;
+            }
+            
+            // Validate company for contractor and organizer
+            const company = document.getElementById('company').value;
+            if ((visitorType === 'contractor' || visitorType === 'organizer') && !company) {
+                showError('กรุณากรอกชื่อบริษัท/หน่วยงาน');
+                document.getElementById('company').classList.add('error');
+                return;
+            }
+            
+            const submitBtn = document.getElementById('submit-btn');
+            const originalContent = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<div class="loading-spinner"></div><span>กำลังบันทึก...</span>';
+            submitBtn.disabled = true;
+            
+            // Build purpose based on visitor type
+            let purposeText = undefined;
+            if (visitorType === 'casual') {
+                purposeText = 'แผนก: ' + department + (lockerNumber ? ', Locker: ' + lockerNumber : '');
+            } else if (visitorType === 'visitor') {
+                purposeText = purposeValue;
+            }
+            
+            const formData = {
+                fullName: document.getElementById('name').value,
+                type: visitorType,
+                idNumber: document.getElementById('idCard').value,
+                phone: document.getElementById('phone').value,
+                company: document.getElementById('company').value || undefined,
+                purpose: purposeText,
+                lockerNumber: visitorType === 'casual' ? lockerNumber : undefined,
+                department: visitorType === 'casual' ? department : undefined,
+                consentAccepted: true
+            };
+            
+            // Check if offline - save locally
+            if (!navigator.onLine) {
+                savePendingRecord({ formData });
+                
+                // Generate local QR code
+                const localRecordId = 'LOCAL-' + Date.now();
+                const { qrCode } = generateQRCode(localRecordId);
+                
+                const now = new Date();
+                goToStep3({
+                    name: formData.fullName,
+                    idCard: formData.idNumber,
+                    visitorType: formData.type,
+                    date: now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
+                    time: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+                    recordId: localRecordId + ' (รอส่ง)',
+                    qrCode: qrCode
+                });
+                
+                clearFormBackup();
+                submitBtn.innerHTML = originalContent;
+                submitBtn.disabled = false;
+                return;
+            }
+            
+            try {
+                // Call the selfCheckIn.submit API using tRPC mutation format
+                const response = await fetch('/api/trpc/selfCheckIn.submit?batch=1', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        "0": {
+                            "json": formData
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('API Response:', result);
+                
+                // Handle batched tRPC response format
+                let data = null;
+                if (Array.isArray(result) && result[0]) {
+                    data = result[0].result?.data?.json || result[0].result?.data;
+                } else if (result.result?.data) {
+                    data = result.result.data.json || result.result.data;
+                } else if (result[0]?.result?.data) {
+                    data = result[0].result.data.json || result[0].result.data;
+                }
+                
+                if (data && data.success) {
+                    // Generate QR code in the format the app expects
+                    const { qrCode } = generateQRCode(data.recordId);
+                    
+                    const now = new Date();
+                    goToStep3({
+                        name: formData.fullName,
+                        idCard: formData.idNumber,
+                        visitorType: formData.type,
+                        date: now.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
+                        time: now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+                        recordId: data.recordId,
+                        qrCode: qrCode
+                    });
+                    
+                    clearFormBackup();
+                } else if (data && data.error) {
+                    showError(data.error);
+                } else if (result.error || (Array.isArray(result) && result[0]?.error)) {
+                    const err = result.error || result[0]?.error;
+                    showError(err.message || 'เกิดข้อผิดพลาดในการลงทะเบียน');
+                } else {
+                    console.error('Unexpected response format:', result);
+                    showError('เกิดข้อผิดพลาดในการลงทะเบียน');
+                }
+            } catch (error) {
+                console.error('API Error:', error);
+                
+                // Save to pending if network error
+                savePendingRecord({ formData });
+                showError('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้ ข้อมูลถูกบันทึกไว้และจะส่งอัตโนมัติเมื่อกลับมาออนไลน์');
+            } finally {
+                submitBtn.innerHTML = originalContent;
+                submitBtn.disabled = false;
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('checkin-form').reset();
+            document.getElementById('consent-checkbox').checked = false;
+            document.getElementById('consent-btn').disabled = true;
+            
+            // Reset locker field
+            document.getElementById('locker-field').classList.add('hidden');
+            document.getElementById('lockerNumber').required = false;
+            document.getElementById('lockerNumber').classList.remove('error');
+            
+            // Reset department field
+            document.getElementById('department-field').classList.add('hidden');
+            document.getElementById('department').required = false;
+            
+            // Reset purpose field
+            document.getElementById('purpose-field').classList.add('hidden');
+            document.getElementById('purpose').required = false;
+            
+            // Reset work area field
+            document.getElementById('work-area-field').classList.add('hidden');
+            document.getElementById('workArea').required = false;
+            
+            clearFormBackup();
+            goToStep1();
+        }
+
+        // Save QR Code as image
+        function saveQRCode() {
+            const qrcodeContainer = document.getElementById('qrcode');
+            const canvas = qrcodeContainer.querySelector('canvas');
+            const img = qrcodeContainer.querySelector('img');
+            
+            let dataUrl;
+            if (canvas) {
+                dataUrl = canvas.toDataURL('image/png');
+            } else if (img) {
+                // Create a canvas to convert img to data URL
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = img.width;
+                tempCanvas.height = img.height;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                dataUrl = tempCanvas.toDataURL('image/png');
+            } else {
+                alert('ไม่พบ QR Code');
+                return;
+            }
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.download = 'QRCode-' + document.getElementById('result-code').textContent + '.png';
+            link.href = dataUrl;
+            link.click();
+        }
+
+        // Load consent text from API on page load
+        async function loadConsent() {
+            try {
+                const response = await fetch('/api/trpc/selfCheckIn.getConsent');
+                const result = await response.json();
+                if (result.result && result.result.data && result.result.data.consentText) {
+                    document.getElementById('consent-text').innerHTML = result.result.data.consentText.replace(/\\n/g, '<br>');
+                }
+            } catch (error) {
+                console.log('Using default consent text');
+            }
+        }
+
+        // Initialize
+        loadConsent();
+        updateOnlineStatus();
+        updatePendingIndicator();
+        
+        // Try to sync pending records on page load
+        if (navigator.onLine) {
+            setTimeout(syncPendingRecords, 2000);
+        }
+    </script>
+</body>
+</html>
